@@ -4,6 +4,7 @@ import RoleRoute from './components/RoleRoute.jsx';
 import {
   AccountPage, AdminCategoriesPage, AdminDashboardPage, AdminInventoryPage,
   AdminBooksPage, BookDetailsPage, BooksPage, FavoritesPage, ForgotPasswordPage,
+  PurchasesPage,
   HomePage, LoginPage, NotFoundPage, ResetPasswordPage, SignUpPage,
 } from './pages.jsx';
 
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="books" element={<BooksPage />} />
         <Route path="books/:bookId" element={<BookDetailsPage />} />
         <Route path="favorites" element={<Protected role="customer"><FavoritesPage /></Protected>} />
+        <Route path="purchases" element={<Protected role="customer"><PurchasesPage /></Protected>} />
         <Route path="account" element={<Protected role="customer"><AccountPage /></Protected>} />
         <Route path="admin" element={<Protected role="admin"><AdminDashboardPage /></Protected>} />
         <Route path="admin/books" element={<Protected role="admin"><AdminBooksPage /></Protected>} />

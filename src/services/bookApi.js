@@ -13,11 +13,15 @@ const initialData = {
     { id: 'boy-mole-fox-horse', title: 'The Boy, the Mole, the Fox and the Horse', author: 'Charlie Mackesy', category_id: 'illustrated', category: 'Illustrated', price: 19, stock: 3, cover_url: 'https://covers.openlibrary.org/b/isbn/9780062976581-M.jpg', description: 'An illustrated tale about kindness, courage, and asking for help.', is_archived: false },
   ],
   favorites: [],
+  orders: [],
 };
 
 function readStore() {
   const savedData = window.localStorage.getItem(STORAGE_KEY);
-  return savedData ? JSON.parse(savedData) : JSON.parse(JSON.stringify(initialData));
+  if (!savedData) return JSON.parse(JSON.stringify(initialData));
+  const store = { ...JSON.parse(JSON.stringify(initialData)), ...JSON.parse(savedData) };
+  if (!Array.isArray(store.orders)) store.orders = [];
+  return store;
 }
 
 function writeStore(store) {
@@ -104,14 +108,42 @@ export async function updateStock(id, stock) {
   writeStore(store);
 }
 
-export async function buyBook(id) {
+export async function buyBook(id, { buyer, paymentMethod }) {
+  if (!buyer?.id || !buyer.email) throw new Error('Sign in as a customer before buying a book.');
+  if (!paymentMethod) throw new Error('Choose a payment method before buying this book.');
   const store = readStore();
   const book = store.books.find((item) => item.id === id && !item.is_archived);
   if (!book) throw new Error('That book is no longer available.');
   if (Number(book.stock) < 1) throw new Error('This book is out of stock.');
   book.stock = Number(book.stock) - 1;
+  const order = {
+    id: makeId('order'),
+    book_id: book.id,
+    book_title: book.title,
+    author: book.author,
+    cover_url: book.cover_url,
+    buyer_id: buyer.id,
+    buyer_email: buyer.email,
+    buyer_name: buyer.display_name || buyer.email,
+    price: Number(book.price || 0),
+    payment_method: paymentMethod,
+    purchased_at: new Date().toISOString(),
+  };
+  store.orders.push(order);
   writeStore(store);
-  return withCategory(book, store.categories);
+  return { book: withCategory(book, store.categories), order };
+}
+
+export async function getPurchases(userId) {
+  const { orders } = readStore();
+  return orders
+    .filter((order) => order.buyer_id === userId)
+    .sort((a, b) => new Date(b.purchased_at) - new Date(a.purchased_at));
+}
+
+export async function getSales() {
+  const { orders } = readStore();
+  return orders.sort((a, b) => new Date(b.purchased_at) - new Date(a.purchased_at));
 }
 
 export async function getFavorites(userId) {

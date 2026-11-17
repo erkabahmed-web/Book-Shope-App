@@ -19,6 +19,7 @@ export function SiteLayout() {
         <nav className="main-nav" aria-label="Main navigation">
           <NavLink to="/books">The shelves</NavLink>
           {profile?.role === 'customer' && <NavLink to="/favorites">Saved books</NavLink>}
+          {profile?.role === 'customer' && <NavLink to="/purchases">Bought books</NavLink>}
           {profile?.role === 'customer' && <NavLink to="/account">My account</NavLink>}
           {profile?.role === 'admin' && <NavLink to="/admin">Shop desk</NavLink>}
         </nav>

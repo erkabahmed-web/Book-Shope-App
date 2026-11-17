@@ -19,6 +19,14 @@ export function Notice({ children, tone = 'error' }) {
   return <div className={`notice notice-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>{children}</div>;
 }
 
+export function formatPrice(price) {
+  const amount = Number(price || 0).toLocaleString('en-ET', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `ETB ${amount}`;
+}
+
 export function Loading({ label = 'A moment, please…' }) {
   return <div className="loading" role="status"><span className="spinner" />{label}</div>;
 }
@@ -56,7 +64,7 @@ export function BookCard({ book }) {
         <p className="book-author">{book.author}</p>
         <h3><Link to={`/books/${book.id}`}>{book.title}</Link></h3>
         <div className="book-card-bottom">
-          <strong>${Number(book.price || 0).toFixed(2)}</strong>
+          <strong>{formatPrice(book.price)}</strong>
           <span>{book.stock > 0 ? 'In the shop' : 'Out of stock'}</span>
         </div>
       </div>

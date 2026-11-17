@@ -2,10 +2,20 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
 import {
-  archiveBook, archiveCategory, buyBook, getBook, getBooks, getCategories, getFavorites,
-  saveBook, saveCategory, toggleFavorite, updateStock,
+  archiveBook, archiveCategory, buyBook, getBook, getBooks, getCategories,
+  getFavorites, getPurchases, getSales, saveBook, saveCategory, toggleFavorite,
+  updateStock,
 } from './services/bookApi.js';
-import { BookCover, BookCard, EmptyState, Field, LinkButton, Loading, Notice, PageHeading } from './components/UI.jsx';
+import { BookCover, BookCard, EmptyState, Field, formatPrice, LinkButton, Loading, Notice, PageHeading } from './components/UI.jsx';
+
+const paymentMethods = {
+  telebirr: 'Telebirr',
+  cbe: 'CBE Birr',
+  boa: 'BOA (Bank of Abyssinia)',
+  amole: 'Amole',
+  hellocash: 'HelloCash',
+  other: 'Other Ethiopian payment portal',
+};
 
 function useBooks(options) {
   const [books, setBooks] = useState([]);
@@ -252,7 +262,7 @@ export function BookDetailsPage() {
   const [purchaseError, setPurchaseError] = useState('');
   const [purchaseMessage, setPurchaseMessage] = useState('');
   const [purchaseBusy, setPurchaseBusy] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('card');
+  const [paymentMethod, setPaymentMethod] = useState('telebirr');
 
   useEffect(() => {
     let active = true;
@@ -285,8 +295,13 @@ export function BookDetailsPage() {
     setPurchaseError('');
     setPurchaseMessage('');
     try {
-      setBook(await buyBook(book.id));
-      const method = paymentMethod === 'card' ? 'demo card' : 'cash on delivery';
+      const method = paymentMethods[paymentMethod];
+      if (!method) throw new Error('Choose an Ethiopian demo payment option.');
+      const { book: updatedBook } = await buyBook(book.id, {
+        buyer: profile,
+        paymentMethod: paymentMethods[paymentMethod],
+      });
+      setBook(updatedBook);
       setPurchaseMessage(`Demo purchase complete with ${method}. One copy has been removed from local inventory. No real payment was processed.`);
     } catch (requestError) {
       setPurchaseError(requestError.message);
@@ -308,16 +323,15 @@ export function BookDetailsPage() {
           <p className="eyebrow">{book.category || book.categories?.name || 'A LITTLE BOOKSHOP FIND'}</p>
           <h1>{book.title}</h1><p className="detail-author">by {book.author}</p>
           <p className="detail-description">{book.description || 'A lovely story is waiting inside. Pick up a copy and find out where it takes you.'}</p>
-          <div className="detail-price"><strong>${Number(book.price || 0).toFixed(2)}</strong><span>{book.stock > 0 ? `${book.stock} on the shelf` : 'Currently out of stock'}</span></div>
+          <div className="detail-price"><strong>{formatPrice(book.price)}</strong><span>{book.stock > 0 ? `${book.stock} on the shelf` : 'Currently out of stock'}</span></div>
           {profile?.role === 'customer' && book.stock > 0 && <>
             <label className="field payment-method">
               <span>Payment method</span>
               <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)}>
-                <option value="card">Card (demo only)</option>
-                <option value="cash">Cash on delivery (demo)</option>
+                {Object.entries(paymentMethods).map(([value, label]) => <option key={value} value={value}>{label} (demo)</option>)}
               </select>
             </label>
-            <p className="field-hint">Demo payment options only. No card details or real payments are collected.</p>
+            <p className="field-hint">Demo payment options only. No real payments are processed.</p>
             <div className="button-row detail-actions"><button className="button" onClick={handleBuy} disabled={purchaseBusy}>{purchaseBusy ? 'Processing…' : 'Buy this book'}</button><button className="button button-secondary" onClick={handleFavorite} disabled={favoriteBusy}>{favoriteBusy ? 'Saving…' : (favorite ? '♥ Saved to favorites' : '♡ Save to favorites')}</button></div>
           </>}
           {profile?.role === 'customer' && book.stock < 1 && <Notice tone="info">This book is out of stock right now.</Notice>}
@@ -348,6 +362,32 @@ export function FavoritesPage() {
       {loading ? <Loading label="Gathering your favorites…" /> : books.length
         ? <div className="book-grid">{books.map((book) => <BookCard key={book.id} book={book} />)}</div>
         : <EmptyState title="Your shelf is waiting for a favorite." action={<LinkButton to="/books">Browse the books</LinkButton>}>Save a book and it’ll be right here when you’re ready.</EmptyState>}
+    </section>
+  );
+}
+
+export function PurchasesPage() {
+  const { session } = useAuth();
+  const [purchases, setPurchases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    getPurchases(session.user.id)
+      .then((result) => { if (active) setPurchases(result); })
+      .catch((requestError) => { if (active) setError(requestError.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [session]);
+
+  return (
+    <section className="content-page">
+      <PageHeading eyebrow="YOUR READING RECEIPTS" title="Bought books." description="Books you have purchased in this demo." />
+      <Notice>{error}</Notice>
+      {loading ? <Loading label="Finding your purchases…" /> : purchases.length
+        ? <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Book</th><th>Date</th><th>Payment method</th><th>Price</th></tr></thead><tbody>{purchases.map((purchase) => <tr key={purchase.id}><td><strong>{purchase.book_title}</strong><span>{purchase.author}</span></td><td><time dateTime={purchase.purchased_at}>{new Date(purchase.purchased_at).toLocaleDateString()}</time></td><td>{purchase.payment_method}</td><td>{formatPrice(purchase.price)}</td></tr>)}</tbody></table></div>
+        : <EmptyState title="You haven't bought a book yet." action={<LinkButton to="/books">Browse the books</LinkButton>}>Your purchases will show up here.</EmptyState>}
     </section>
   );
 }
@@ -392,16 +432,25 @@ export function AdminDashboardPage() {
   const { profile } = useAuth();
   const [categories, setCategories] = useState([]);
   const [categoryError, setCategoryError] = useState('');
-  useEffect(() => { getCategories({ includeArchived: true }).then(setCategories).catch((requestError) => setCategoryError(requestError.message)); }, []);
+  const [sales, setSales] = useState([]);
+  const [salesError, setSalesError] = useState('');
+  useEffect(() => {
+    getCategories({ includeArchived: true }).then(setCategories).catch((requestError) => setCategoryError(requestError.message));
+    getSales().then(setSales).catch((requestError) => setSalesError(requestError.message));
+  }, []);
   const activeBooks = books.filter((book) => !book.is_archived);
   const totalStock = activeBooks.reduce((total, book) => total + Number(book.stock || 0), 0);
   return (
     <section className="content-page">
       <PageHeading eyebrow="THE LITTLE SHOP DESK" title={`Hello, ${profile.display_name || 'shopkeeper'}.`} description="A quick look at how your bookshop is doing today." />
       <AdminNav />
-      <Notice>{error || categoryError}</Notice>
+      <Notice>{error || categoryError || salesError}</Notice>
       {loading ? <Loading /> : <div className="stats-grid"><div className="stat-card"><span>ACTIVE BOOKS</span><strong>{activeBooks.length}</strong><small>Stories on your shelves</small></div><div className="stat-card"><span>CATEGORIES</span><strong>{categories.filter((item) => !item.is_archived).length}</strong><small>Ways to find a story</small></div><div className="stat-card"><span>BOOKS IN STOCK</span><strong>{totalStock}</strong><small>Copies ready to find a reader</small></div></div>}
       <div className="admin-welcome"><div><p className="eyebrow">A FRIENDLY REMINDER</p><h2>Little details make a lovely shop.</h2><p className="muted">Keep your catalogue tidy, your categories clear, and your stock up to date.</p></div><LinkButton to="/admin/books">Manage books <span>↗</span></LinkButton></div>
+      <div className="admin-list-wrap sales-list"><h2>Sold books <span>{sales.length}</span></h2>
+        {sales.length ? <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Book</th><th>Customer</th><th>Payment</th><th>Date</th><th>Price</th></tr></thead><tbody>{sales.map((sale) => <tr key={sale.id}><td><strong>{sale.book_title}</strong><span>{sale.author}</span></td><td><strong>{sale.buyer_name}</strong><span>{sale.buyer_email}</span></td><td>{sale.payment_method}</td><td><time dateTime={sale.purchased_at}>{new Date(sale.purchased_at).toLocaleDateString()}</time></td><td>{formatPrice(sale.price)}</td></tr>)}</tbody></table></div>
+          : <EmptyState title="No books have been sold yet.">Customer demo purchases will appear here.</EmptyState>}
+      </div>
     </section>
   );
 }
@@ -486,11 +535,11 @@ export function AdminBooksPage() {
           <p className="field-hint">Upload an image under 1 MB, or enter a cover image URL below.</p>
           <Field label="Cover image URL" type="url" value={form.cover_url.startsWith('data:') ? '' : form.cover_url} onChange={(event) => setForm({ ...form, cover_url: event.target.value })} />
           {form.cover_url && <div className="cover-upload-preview"><div className="cover-upload-thumbnail"><BookCover key={form.cover_url} book={{ title: form.title || 'Cover preview', cover_url: form.cover_url }} /></div><button type="button" className="plain-button" onClick={() => setForm({ ...form, cover_url: '' })}>Remove cover</button></div>}
-          <div className="field-row"><Field label="Price ($)" type="number" min="0" step="0.01" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required /><Field label="Copies in stock" type="number" min="0" step="1" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} required /></div>
+          <div className="field-row"><Field label="Price (Birr / ETB)" type="number" min="0" step="0.01" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} required /><Field label="Copies in stock" type="number" min="0" step="1" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} required /></div>
           <div className="button-row"><button className="button" disabled={busy}>{busy ? 'Saving…' : editingId ? 'Save changes' : 'Add book'} <span>↗</span></button>{editingId && <button type="button" className="plain-button" onClick={() => { setEditingId(null); setForm(emptyBook); }}>Cancel</button>}</div>
         </form>
         <div className="admin-list-wrap"><h2>Books in the catalogue <span>{books.length}</span></h2>
-          {loading ? <Loading /> : books.length ? <div className="admin-list">{books.map((book) => <article className={`admin-book-row ${book.is_archived ? 'is-archived' : ''}`} key={book.id}><BookCover book={book} /><div className="admin-book-copy"><strong>{book.title}</strong><span>{book.author}</span><small>${Number(book.price || 0).toFixed(2)} · {book.stock} copies · {book.categories?.name || book.category || 'No category'}{book.is_archived ? ' · Archived' : ''}</small></div><div className="row-actions"><button className="plain-button" onClick={() => editBook(book)}>Edit</button><button className="plain-button archive-button" onClick={() => archive(book)}>{book.is_archived ? 'Restore' : 'Archive'}</button></div></article>)}</div> : <EmptyState title="No books just yet">Add the first title using the form.</EmptyState>}
+          {loading ? <Loading /> : books.length ? <div className="admin-list">{books.map((book) => <article className={`admin-book-row ${book.is_archived ? 'is-archived' : ''}`} key={book.id}><BookCover book={book} /><div className="admin-book-copy"><strong>{book.title}</strong><span>{book.author}</span><small>{formatPrice(book.price)} · {book.stock} copies · {book.categories?.name || book.category || 'No category'}{book.is_archived ? ' · Archived' : ''}</small></div><div className="row-actions"><button className="plain-button" onClick={() => editBook(book)}>Edit</button><button className="plain-button archive-button" onClick={() => archive(book)}>{book.is_archived ? 'Restore' : 'Archive'}</button></div></article>)}</div> : <EmptyState title="No books just yet">Add the first title using the form.</EmptyState>}
         </div>
       </div>
     </section>

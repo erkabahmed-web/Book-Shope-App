@@ -204,6 +204,7 @@ button { color: inherit; }
 .plain-button:disabled { opacity: .45; cursor: not-allowed; }
 .archive-button { color: #a3644d; }
 .admin-list-wrap h2, .category-list h2 { margin: 3px 0 14px; font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 500; }
+.sales-list { margin-top: 32px; }
 .admin-list-wrap h2 span { display: inline-grid; min-width: 23px; height: 23px; place-items: center; margin-left: 5px; border-radius: 50%; background: #edf1eb; color: var(--green); font: 10px 'DM Sans', sans-serif; }
 .admin-list { border-top: 1px solid var(--line); }
 .admin-book-row { min-height: 86px; display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
