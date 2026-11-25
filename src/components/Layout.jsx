@@ -29,12 +29,4 @@ export function SiteLayout() {
             : <Link className="button button-small" to="/login">Sign in <span aria-hidden="true">↗</span></Link>}
         </div>
       </header>
-      <main className="main-content"><Outlet /></main>
-      <footer className="site-footer">
-        <Link className="footer-brand" to="/">little bookshop <span>✿</span></Link>
-        <p>Made for slow mornings and one-more-chapter nights.</p>
-        <span>© {new Date().getFullYear()} Little Bookshop</span>
-      </footer>
-    </div>
-  );
-}
+      
